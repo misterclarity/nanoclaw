@@ -129,9 +129,9 @@ function buildVolumeMounts(
       JSON.stringify(
         {
           env: {
-            // Enable agent swarms (subagent orchestration)
-            // https://code.claude.com/docs/en/agent-teams#orchestrate-teams-of-claude-code-sessions
-            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+            // Agent teams disabled — requires strong multi-agent orchestration
+            // that smaller/local models can't handle reliably.
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '0',
             // Load CLAUDE.md from additional mounted directories
             // https://code.claude.com/docs/en/memory#load-memory-from-additional-directories
             CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
@@ -226,6 +226,11 @@ function buildContainerArgs(
     '-e',
     `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`,
   );
+
+  // Raise SDK HTTP timeout ceiling to 30 min. Essential for local models where
+  // CPU-only prompt eval can take 10+ min. Harmless for Claude mode (SDK
+  // retries on its own well before this).
+  args.push('-e', 'API_TIMEOUT_MS=1800000');
 
   // Mirror the host's auth method with a placeholder value.
   // API key mode: SDK sends x-api-key, proxy replaces with real key.

@@ -396,17 +396,14 @@ async function runQuery(
       additionalDirectories: extraDirs.length > 0 ? extraDirs : undefined,
       resume: sessionId,
       resumeSessionAt: resumeAt,
-      systemPrompt: globalClaudeMd
-        ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
-        : undefined,
+      // Pass system prompt as a plain string instead of the claude_code preset.
+      // The preset is ~70KB which takes 40+ min for CPU-only prompt eval.
+      systemPrompt: globalClaudeMd || '',
       allowedTools: [
+        // Core tools only — fewer tools = smaller prompt = faster prompt
+        // eval on CPU. Weaker models struggle with too many tools anyway.
         'Bash',
         'Read', 'Write', 'Edit', 'Glob', 'Grep',
-        'WebSearch', 'WebFetch',
-        'Task', 'TaskOutput', 'TaskStop',
-        'TeamCreate', 'TeamDelete', 'SendMessage',
-        'TodoWrite', 'ToolSearch', 'Skill',
-        'NotebookEdit',
         'mcp__nanoclaw__*'
       ],
       env: sdkEnv,

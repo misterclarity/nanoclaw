@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     libasound2 \
     libpangocairo-1.0-0 \
     libcups2 \
+    cups-client \
     libdrm2 \
     libxshmfence1 \
     curl \

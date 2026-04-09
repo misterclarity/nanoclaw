@@ -168,6 +168,68 @@ Key files:
 - `src/db.ts` - SQLite operations (messages, groups, sessions, state)
 - `groups/*/CLAUDE.md` - Per-group memory
 
+## Local Models with Ollama
+
+NanoClaw can run entirely on local models via [Ollama](https://ollama.com), with no Anthropic API key required. The credential proxy translates Anthropic Messages API requests to Ollama's native `/api/chat` format automatically.
+
+### Setup
+
+1. **Install Ollama** — [ollama.com/download](https://ollama.com/download)
+
+2. **Pull a model:**
+   ```bash
+   ollama pull gemma4:e2b        # 5.1B, good for CPU-only
+   ollama pull qwen3:14b          # 14B, needs ~10GB VRAM
+   ollama pull gemma4:27b         # 27B, needs ~18GB VRAM
+   ```
+
+3. **Configure NanoClaw** — add to your `.env` file:
+   ```bash
+   OLLAMA_MODEL=gemma4:e2b
+   # Optional:
+   # OLLAMA_HOST=http://localhost:11434    # default
+   # OLLAMA_CONTEXT_LENGTH=8192           # default, increase for GPU
+   # OLLAMA_SYSTEM_PROMPT_FILE=/path/to/custom-prompt.txt
+   ```
+
+4. **Start NanoClaw** as usual (`npm run dev` or `systemctl --user start nanoclaw`).
+
+That's it. When `OLLAMA_MODEL` is set, all LLM traffic routes to Ollama instead of the Anthropic API.
+
+### What the proxy does
+
+The Claude Agent SDK and CLI always speak Anthropic API format. The credential proxy intercepts these requests and:
+
+- **Translates requests** from Anthropic Messages API to Ollama's native `/api/chat` format
+- **Replaces the system prompt** — the CLI sends a ~70KB system prompt; the proxy substitutes a compact 2.7KB one from `groups/global/CLAUDE.md`
+- **Filters tools** — the CLI sends 30+ tool definitions (~35KB); the proxy forwards only essential ones (Bash, Read, Write, Edit, Glob, Grep, plus MCP tools)
+- **Sends SSE keep-alive pings** during slow prompt evaluation to prevent SDK timeouts
+- **Translates responses** (including streaming) back to Anthropic format
+
+### Dashboard
+
+A web dashboard is available at `http://localhost:3001/dashboard` for runtime configuration:
+
+- **Switch models** without restarting — select from all models available in Ollama
+- **Toggle think mode** — enable/disable reasoning mode (model-dependent)
+- **Adjust context length** — change `num_ctx` on the fly
+
+Changes take effect on the next request. They are not persisted across restarts — the `.env` file remains the source of truth for defaults.
+
+### Performance expectations
+
+| Hardware | Model | Prompt eval | Response time |
+|----------|-------|-------------|---------------|
+| CPU only (8-core) | gemma4:e2b (5.1B) | ~8 tok/s | ~10-15 min |
+| GPU 8GB VRAM | gemma4:e2b (5.1B) | ~2000 tok/s | < 5 sec |
+| GPU 16GB VRAM | qwen3:14b (14B) | ~1000 tok/s | < 10 sec |
+
+CPU-only inference works but is slow due to the prompt size (~8-10K tokens after filtering). A GPU is strongly recommended for interactive use.
+
+### Customizing the system prompt
+
+Edit `groups/global/CLAUDE.md` to change the assistant's persona, behavior rules, and security guidelines. This file replaces the CLI's default 70KB system prompt with something small models can actually process. You can also set `OLLAMA_SYSTEM_PROMPT_FILE` in `.env` to use a different file.
+
 ## FAQ
 
 **Why Docker?**
@@ -186,21 +248,11 @@ Agents run in containers, not behind application-level permission checks. They c
 
 We don't want configuration sprawl. Every user should customize NanoClaw so that the code does exactly what they want, rather than configuring a generic system. If you prefer having config files, you can tell Claude to add them.
 
-**Can I use third-party or open-source models?**
+**Can I use local models instead of Claude?**
 
-Yes. NanoClaw supports any Claude API-compatible model endpoint. Set these environment variables in your `.env` file:
+Yes. NanoClaw has built-in [Ollama](https://ollama.com) support that translates the Anthropic API to Ollama's native format. No Anthropic API key needed. See the [Local Models with Ollama](#local-models-with-ollama) section below.
 
-```bash
-ANTHROPIC_BASE_URL=https://your-api-endpoint.com
-ANTHROPIC_AUTH_TOKEN=your-token-here
-```
-
-This allows you to use:
-- Local models via [Ollama](https://ollama.ai) with an API proxy
-- Open-source models hosted on [Together AI](https://together.ai), [Fireworks](https://fireworks.ai), etc.
-- Custom model deployments with Anthropic-compatible APIs
-
-Note: The model must support the Anthropic API format for best compatibility.
+You can also use any Anthropic API-compatible endpoint by setting `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` in your `.env` file.
 
 **How do I debug issues?**
 
